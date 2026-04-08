@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>ScratchS3</title>
+    <!-- Corrected CDN Link Below -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background: #0d0d0d; color: #00d4ff; text-align: center; padding: 50px; }
+        .ui-box { border: 2px dashed #00d4ff; padding: 40px; display: inline-block; border-radius: 20px; background: #1a1a1a; }
+        input { margin: 20px; color: white; }
+        button { background: #00d4ff; color: #000; border: none; padding: 15px 40px; cursor: pointer; font-weight: bold; border-radius: 5px; }
+        #status { margin-top: 20px; font-family: monospace; color: #ffcc00; }
+    </style>
+</head>
+<body>
+    <div class="ui-box">
+        <h1>PS3 TO TURBOWARP ZIPPER</h1>
+        <p>Restricted to: .pkg, .bin, .iso, .elf</p>
+        <input type="file" id="ps3input" accept=".pkg,.bin,.iso,.elf">
+        <br>
+        <button onclick="generateZip()">GENERATE ZIP ARCHIVE</button>
+        <div id="status"></div>
+    </div>
+
+    <script>
+        async function generateZip() {
+            const fileInput = document.getElementById('ps3input');
+            const status = document.getElementById('status');
+            if (!fileInput.files.length) return alert("Select a file first!");
+
+            const file = fileInput.files[0];
+            status.innerText = "Reading file...";
+            
+            const buffer = await file.arrayBuffer();
+            const data32 = new Uint32Array(buffer);
+            const chunkSize = 200000;
+            const totalParts = Math.ceil(data32.length / chunkSize);
+            
+            const zip = new JSZip();
+            status.innerText = `Chunking into ${totalParts} parts...`;
+
+            for (let i = 0; i < totalParts; i++) {
+                const chunk = data32.slice(i * chunkSize, (i + 1) * chunkSize);
+                zip.file(`${i + 1}.txt`, chunk.join('\n'));
+            }
+
+            status.innerText = "Compressing ZIP...";
+            const zipBlob = await zip.generateAsync({type: "blob"});
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(zipBlob);
+            a.download = "PS3_RAM_CHUNKS.zip";
+            a.click();
+            status.innerText = "DONE! Extract and import to RAM_1, RAM_2, etc.";
+        }
+    </script>
+</body>
+</html>
