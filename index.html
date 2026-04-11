@@ -1,35 +1,42 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Scratch Mesh String Generator</title>
+    <title>Scratch Mesh Auto-Downloader</title>
     <style>
-        body { font-family: sans-serif; background: #111; color: #eee; padding: 20px; text-align: center; }
-        .box { background: #222; padding: 20px; border-radius: 10px; border: 1px solid #444; display: inline-block; }
-        textarea { width: 90vw; height: 200px; margin-top: 10px; background: #000; color: #0f0; border: 1px solid #555; font-family: monospace; word-break: break-all; }
-        button { padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #121212; color: #e0e0e0; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .card { background: #1e1e1e; padding: 30px; border-radius: 12px; border: 1px solid #333; box-shadow: 0 10px 30px rgba(0,0,0,0.5); text-align: center; width: 400px; }
+        h2 { color: #4a90e2; margin-bottom: 20px; }
+        input[type="file"] { margin: 20px 0; color: #888; }
+        .status { margin-top: 15px; font-size: 14px; color: #4caf50; font-weight: bold; }
+        p { font-size: 13px; color: #888; }
     </style>
 </head>
 <body>
-    <div class="box">
-        <h2>Single-String Mesh Converter</h2>
-        <input type="file" id="fileInput" accept=".obj"><br><br>
-        <button onclick="convert()">Generate Scratch String</button><br>
-        <textarea id="output" readonly placeholder="Resulting string will appear here..."></textarea>
+    <div class="card">
+        <h2>Mesh Converter</h2>
+        <p>Select an .obj file to automatically download the Scratch mesh string.</p>
+        <input type="file" id="fileInput" accept=".obj">
+        <div id="status" class="status"></div>
     </div>
 
 <script>
-function convert() {
-    const file = document.getElementById('fileInput').files[0];
+document.getElementById('fileInput').addEventListener('change', function(e) {
+    const file = e.target.files[0];
     if (!file) return;
+
     const reader = new FileReader();
-    reader.onload = function(e) {
-        const lines = e.target.result.split('\n');
+    reader.onload = function(event) {
+        const lines = event.target.result.split('\n');
         let v = [], f = [];
         
         lines.forEach(line => {
             const p = line.trim().split(/\s+/);
-            if (p[0] === 'v') v.push(`${p[1]},${p[2]},${p[3]}`);
-            if (p[0] === 'f') {
+            // Vertices
+            if (p[0] === 'v') {
+                v.push(`${parseFloat(p[1]).toFixed(3)},${parseFloat(p[2]).toFixed(3)},${parseFloat(p[3]).toFixed(3)}`);
+            } 
+            // Faces (Triangulated)
+            else if (p[0] === 'f') {
                 const idx = p.slice(1).map(x => x.split('/')[0]);
                 for (let i = 1; i < idx.length - 1; i++) {
                     f.push(`${idx[0]},${idx[i]},${idx[i+1]}`);
@@ -37,12 +44,24 @@ function convert() {
             }
         });
 
-        // Format: vCount | v1,v2... | f1,f2...
+        // Combined string: vCount|vData|fData
         const meshString = `${v.length}|${v.join(',')}|${f.join(',')}`;
-        document.getElementById('output').value = meshString;
+        
+        // Auto-Download Logic
+        const blob = new Blob([meshString], { type: 'text/plain' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = file.name.replace('.obj', '_mesh.txt');
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+
+        document.getElementById('status').innerText = "✓ Downloaded: " + file.name.replace('.obj', '_mesh.txt');
     };
     reader.readAsText(file);
-}
+});
 </script>
 </body>
 </html>
