@@ -2,76 +2,83 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>ScratchS3</title>
+    <title>Scratch 3D Mesh Converter</title>
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #0d0d0d; color: #00d4ff; text-align: center; padding: 50px; }
-        .ui-box { border: 2px solid #00d4ff; padding: 40px; display: inline-block; border-radius: 20px; background: #1a1a1a; box-shadow: 0 0 20px rgba(0, 212, 255, 0.2); }
-        button { background: #00d4ff; color: #000; border: none; padding: 15px 40px; cursor: pointer; font-weight: bold; border-radius: 5px; transition: 0.2s; }
-        button:hover { background: #0099bb; }
-        input[type="file"] { margin: 20px 0; color: #fff; }
-        #status { margin-top: 20px; font-family: monospace; color: #ffcc00; }
-        .progress-container { width: 100%; background: #333; border-radius: 10px; margin-top: 20px; display: none; overflow: hidden; }
-        #pBar { width: 0%; height: 20px; background: #00d4ff; transition: width 0.1s linear; }
+        body { font-family: sans-serif; background: #222; color: #eee; padding: 20px; line-height: 1.5; }
+        .container { max-width: 800px; margin: auto; background: #333; padding: 20px; border-radius: 8px; }
+        textarea { width: 100%; height: 300px; background: #111; color: #0f0; border: 1px solid #555; font-family: monospace; margin-top: 10px; }
+        .controls { margin-bottom: 20px; }
+        button { padding: 10px 20px; cursor: pointer; background: #4CAF50; border: none; color: white; border-radius: 4px; }
+        input { margin-bottom: 10px; }
     </style>
 </head>
 <body>
-    <div class="ui-box">
-        <h1>ScratchS3</h1>
-        <input type="file" id="ps3input">
-        <br>
-        <button onclick="process()">GENERATE IMPORT FILE</button>
-        <div class="progress-container" id="pContainer">
-            <div id="pBar"></div>
-        </div>
-        <div id="status">Ready</div>
+
+<div class="container">
+    <h2>Scratch 3D Mesh Converter</h2>
+    <p>Convert .OBJ files to your custom <code>Add Triangle</code> and <code>Add Quad</code> Scratch blocks.</p>
+    
+    <div class="controls">
+        <input type="file" id="fileInput" accept=".obj"><br>
+        <label>Material Name: </label>
+        <input type="text" id="matName" value="default"><br>
+        <label>Scale Factor: </label>
+        <input type="number" id="scale" value="1" step="0.1"><br>
+        <button onclick="convertObj()">Convert to Scratch Blocks</button>
     </div>
 
-    <script>
-        async function process() {
-            const input = document.getElementById('ps3input');
-            const status = document.getElementById('status');
-            const pBar = document.getElementById('pBar');
-            const pContainer = document.getElementById('pContainer');
-            
-            if (!input.files[0]) return alert("Select a file.");
+    <textarea id="output" readonly placeholder="Scratch code will appear here..."></textarea>
+</div>
 
-            const file = input.files[0];
-            status.innerText = "Reading Binary...";
-            pContainer.style.display = "block";
-            pBar.style.width = "0%";
+<script>
+function convertObj() {
+    const fileInput = document.getElementById('fileInput');
+    const output = document.getElementById('output');
+    const mat = document.getElementById('matName').value;
+    const scale = parseFloat(document.getElementById('scale').value);
 
-            const buffer = await file.arrayBuffer();
-            const data32 = new Uint32Array(buffer);
-            const total = data32.length;
-            
-            const blobs = [];
-            const step = 25000; // Chunk size for memory safety
-            
-            for (let i = 0; i < total; i += step) {
-                const chunk = data32.subarray(i, i + step);
-                blobs.push(chunk.join('\n') + '\n');
-                
-                // Update Progress Bar
-                if (i % 100000 === 0 || i + step >= total) {
-                    const percent = Math.min(((i + step) / total) * 100, 100);
-                    pBar.style.width = percent + "%";
-                    status.innerText = `Processing: ${Math.round(percent)}%`;
-                    await new Promise(r => setTimeout(r, 0)); // Keep UI responsive
+    if (!fileInput.files[0]) {
+        alert("Please select an .obj file first!");
+        return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        const lines = e.target.result.split('\n');
+        const verts = [];
+        let scratchCode = "define-atomic Load Mesh\n";
+        
+        lines.forEach(line => {
+            const parts = line.trim().split(/\s+/);
+            if (parts[0] === 'v') {
+                // Vertex: v x y z
+                verts.push({
+                    x: (parseFloat(parts[1]) * scale).toFixed(3),
+                    y: (parseFloat(parts[2]) * scale).toFixed(3),
+                    z: (parseFloat(parts[3]) * scale).toFixed(3)
+                });
+            } else if (parts[0] === 'f') {
+                // Face: f v1/vt1/vn1 v2/vt2/vn2 ...
+                // We only care about the vertex index (the first number before the slash)
+                const indices = parts.slice(1).map(p => parseInt(p.split('/')[0]) - 1);
+
+                if (indices.length === 3) {
+                    // Triangle
+                    const v1 = verts[indices[0]], v2 = verts[indices[1]], v3 = verts[indices[2]];
+                    scratchCode += `Add Triangle at: (${v1.x}) (${v1.y}) (${v1.z}) . (${v2.x}) (${v2.y}) (${v2.z}) . (${v3.x}) (${v3.y}) (${v3.z}) material: (${mat}) BFC? (1) solid? (1) invisible? (0)\n`;
+                } else if (indices.length === 4) {
+                    // Quad
+                    const v1 = verts[indices[0]], v2 = verts[indices[1]], v3 = verts[indices[2]], v4 = verts[indices[3]];
+                    scratchCode += `Add Quad at: (${v1.x}) (${v1.y}) (${v1.z}) . (${v2.x}) (${v2.y}) (${v2.z}) . (${v3.x}) (${v3.y}) (${v3.z}) . (${v4.x}) (${v4.y}) (${v4.z}) material: (${mat}) BFC? (1) solid? (1) invisible? (0)\n`;
                 }
             }
+        });
 
-            status.innerText = "Finalizing Download...";
-            const finalBlob = new Blob(blobs, { type: 'text/plain' });
-            const url = URL.createObjectURL(finalBlob);
-            
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = "IMPORT_TO_SCRATCH.txt";
-            a.click();
-            
-            status.innerText = "DONE!";
-            URL.revokeObjectURL(url);
-        }
-    </script>
+        output.value = scratchCode;
+    };
+    reader.readAsText(fileInput.files[0]);
+}
+</script>
+
 </body>
 </html>
